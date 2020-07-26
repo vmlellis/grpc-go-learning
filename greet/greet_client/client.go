@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/vmlellis/grpc-go-learning/greet/greetpb"
@@ -22,14 +23,16 @@ func main() {
 	// fmt.Printf("Created client: %f", c)
 
 	doUnary(c)
+
+	doServerStreaming(c)
 }
 
 func doUnary(c greetpb.GreetServiceClient) {
-	fmt.Println("Starting do a Unary RPC...")
+	fmt.Println("Starting to do a Unary RPC...")
 
 	req := &greetpb.GreetRequest{
 		Greeting: &greetpb.Greeting{
-			FirstName: "Raysa",
+			FirstName: "Victor",
 			LastName:  "Lellis",
 		},
 	}
@@ -39,4 +42,31 @@ func doUnary(c greetpb.GreetServiceClient) {
 		log.Fatalf("error while calling Greet RPC: %v", err)
 	}
 	log.Printf("Response from Greet: %v", res.GetResult())
+}
+
+func doServerStreaming(c greetpb.GreetServiceClient) {
+	fmt.Println("Starting to do a Server Streaming RPC...")
+
+	req := &greetpb.GreetManyTimesRequest{
+		Greeting: &greetpb.Greeting{
+			FirstName: "Victor",
+			LastName:  "Lellis",
+		},
+	}
+
+	resStream, err := c.GreetManyTimes(context.Background(), req)
+	if err != nil {
+		log.Fatalf("error while calling GreetManyTimes RPC: %v", err)
+	}
+	for {
+		msg, err := resStream.Recv()
+		if err == io.EOF {
+			// we've reached the end of the stram
+			break
+		}
+		if err != nil {
+			log.Fatalf("error while reading stream: %v", err)
+		}
+		log.Printf("Response from GreetManyTimes: %v", msg.GetResult())
+	}
 }
