@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"github.com/vmlellis/grpc-go-learning/calculator/calculatorpb"
 	"google.golang.org/grpc"
@@ -23,7 +24,8 @@ func main() {
 
 	// doUnary(c)
 	// doServerStreaming(c)
-	doClientStreaming(c)
+	// doClientStreaming(c)
+	doBiDiStreaming(c)
 }
 
 func doUnary(c calculatorpb.CalculatorServiceClient) {
@@ -36,7 +38,7 @@ func doUnary(c calculatorpb.CalculatorServiceClient) {
 
 	res, err := c.Sum(context.Background(), req)
 	if err != nil {
-		log.Fatalf("error while calling Greet RPC: %v", err)
+		log.Fatalf("Error while calling Greet RPC: %v", err)
 	}
 	log.Printf("Response from Greet: %v", res.GetSumResult())
 }
@@ -66,7 +68,7 @@ func doServerStreaming(c calculatorpb.CalculatorServiceClient) {
 func doClientStreaming(c calculatorpb.CalculatorServiceClient) {
 	fmt.Println("Starting to do a Client Streaming RPC...")
 
-	numbers := []int32{1, 2, 3, 4}
+	numbers := []int32{1, 2, 3, 4, 7, 9, 12, 13}
 
 	stream, err := c.ComputeAverage(context.Background())
 	if err != nil {
@@ -84,4 +86,52 @@ func doClientStreaming(c calculatorpb.CalculatorServiceClient) {
 	}
 
 	fmt.Printf("The Average is: %v\n", res.GetAverage())
+}
+
+func doBiDiStreaming(c calculatorpb.CalculatorServiceClient) {
+	fmt.Println("Starting to do a BiDi Streaming RPC...")
+
+	stream, err := c.FindMaximum(context.Background())
+	if err != nil {
+		log.Fatalf("Error while creating stream FindMaximum: %v", err)
+		return
+	}
+
+	waitc := make(chan struct{})
+
+	// send go routine
+	go sendNumbersToFindMaximum(stream)
+
+	// receive go routine
+	go receiveNumbersFromFindMaximum(stream, waitc)
+
+	<-waitc
+}
+
+func sendNumbersToFindMaximum(stream calculatorpb.CalculatorService_FindMaximumClient) {
+	numbers := []int32{1, 5, 3, 6, 2, 20}
+	for _, number := range numbers {
+		fmt.Printf("Sending number: %v\n", number)
+		req := &calculatorpb.FindMaximumRequest{
+			Number: number,
+		}
+		stream.Send(req)
+		time.Sleep(10 * time.Millisecond)
+	}
+	stream.CloseSend()
+}
+
+func receiveNumbersFromFindMaximum(stream calculatorpb.CalculatorService_FindMaximumClient, waitc chan<- struct{}) {
+	for {
+		res, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Error while reading server stream: %v", err)
+			break
+		}
+		fmt.Printf("New maximum: %v\n", res.GetMaximum())
+	}
+	close(waitc)
 }
