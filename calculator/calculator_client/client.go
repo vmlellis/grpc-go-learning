@@ -58,7 +58,7 @@ func doServerStreaming(c calculatorpb.CalculatorServiceClient) {
 	for {
 		msg, err := resStream.Recv()
 		if err == io.EOF {
-			// we've reached the end of the stram
+			// we've reached the end of the stream
 			break
 		}
 		if err != nil {
