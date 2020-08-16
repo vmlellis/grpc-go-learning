@@ -29,7 +29,7 @@ type blogItem struct {
 
 type server struct{}
 
-func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*blogpb.CreateBlogRequestResponse, error) {
+func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*blogpb.CreateBlogResponse, error) {
 	fmt.Println("Create blog request")
 	blog := req.GetBlog()
 
@@ -55,7 +55,7 @@ func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*
 		)
 	}
 
-	result := &blogpb.CreateBlogRequestResponse{
+	result := &blogpb.CreateBlogResponse{
 		Blog: &blogpb.Blog{
 			Id:       oid.Hex(),
 			AuthorId: blog.GetAuthorId(),
@@ -67,7 +67,7 @@ func (*server) CreateBlog(ctx context.Context, req *blogpb.CreateBlogRequest) (*
 	return result, nil
 }
 
-func (*server) ReadBlog(ctx context.Context, req *blogpb.ReadBlogRequest) (*blogpb.ReadBlogRequestResponse, error) {
+func (*server) ReadBlog(ctx context.Context, req *blogpb.ReadBlogRequest) (*blogpb.ReadBlogResponse, error) {
 	fmt.Println("Read blog request")
 
 	blogId := req.GetBlogId()
@@ -91,16 +91,81 @@ func (*server) ReadBlog(ctx context.Context, req *blogpb.ReadBlogRequest) (*blog
 		)
 	}
 
-	response := &blogpb.ReadBlogRequestResponse{
-		Blog: &blogpb.Blog{
-			Id:       data.ID.Hex(),
-			AuthorId: data.AuthorId,
-			Content:  data.Content,
-			Title:    data.Title,
-		},
+	response := &blogpb.ReadBlogResponse{
+		Blog: dataToBlogPb(data),
 	}
 
 	return response, nil
+}
+
+func (*server) UpdateBlog(ctx context.Context, req *blogpb.UpdateBlogRequest) (*blogpb.UpdateBlogResponse, error) {
+	fmt.Println("Update blog request")
+
+	blog := req.GetBlog()
+	oid, err := primitive.ObjectIDFromHex(blog.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			fmt.Sprintf("Cannot parse ID"),
+		)
+	}
+
+	data := &blogItem{}
+	filter := primitive.M{"_id": oid}
+
+	update := primitive.D{
+		{Key: "$set", Value: primitive.D{{Key: "title", Value: blog.GetTitle()}}},
+		{Key: "$set", Value: primitive.D{{Key: "content", Value: blog.GetContent()}}},
+		{Key: "$set", Value: primitive.D{{Key: "author_id", Value: blog.GetAuthorId()}}},
+	}
+
+	if err := collection.FindOneAndUpdate(ctx, filter, update).Decode(&data); err != nil {
+		return nil, status.Errorf(codes.Internal, "Error while replacing data: %v", err)
+	}
+
+	data.AuthorId = blog.GetAuthorId()
+	data.Content = blog.GetContent()
+	data.Title = blog.GetTitle()
+
+	response := &blogpb.UpdateBlogResponse{
+		Blog: dataToBlogPb(data),
+	}
+
+	return response, nil
+}
+
+func (*server) DeleteBlog(ctx context.Context, req *blogpb.DeleteBlogRequest) (*blogpb.DeleteBlogResponse, error) {
+	fmt.Println("Delete blog request")
+
+	blogId := req.GetBlogId()
+	oid, err := primitive.ObjectIDFromHex(blogId)
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			fmt.Sprintf("Cannot parse ID"),
+		)
+	}
+
+	filter := primitive.M{"_id": oid}
+	res, err := collection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Error while deleting object in MongoDDB: %v", err)
+	}
+
+	if res.DeletedCount == 0 {
+		return nil, status.Errorf(codes.NotFound, "Cannot find blog in MongoDDB: %v", err)
+	}
+
+	return &blogpb.DeleteBlogResponse{BlogId: blogId}, nil
+}
+
+func dataToBlogPb(data *blogItem) *blogpb.Blog {
+	return &blogpb.Blog{
+		Id:       data.ID.Hex(),
+		AuthorId: data.AuthorId,
+		Content:  data.Content,
+		Title:    data.Title,
+	}
 }
 
 func main() {

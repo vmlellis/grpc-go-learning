@@ -64,4 +64,28 @@ func main() {
 	} else {
 		fmt.Printf("Blog was read: %v\n", readBloqRes)
 	}
+
+	// update Blog
+	fmt.Println("Updating the blog")
+
+	newBlog := &blogpb.Blog{
+		Id:       blogId,
+		AuthorId: "Change Author",
+		Title:    "My First Blog (edit)",
+		Content:  "Content of the first blog, with some awesome additions!",
+	}
+	updateRes, err := c.UpdateBlog(context.Background(), &blogpb.UpdateBlogRequest{Blog: newBlog})
+	if err != nil {
+		fmt.Printf("Error happened while updating: %v\n", err)
+	} else {
+		fmt.Printf("Blog was updated: %v\n", updateRes)
+	}
+
+	// delete Blog
+	deleteRes, err := c.DeleteBlog(context.Background(), &blogpb.DeleteBlogRequest{BlogId: blogId})
+	if err != nil {
+		fmt.Printf("Error happened while deleting: %v\n", err)
+	} else {
+		fmt.Printf("Blog was deleted: %v\n", deleteRes)
+	}
 }
